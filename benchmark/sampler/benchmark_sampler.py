@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (C) 2026 Tencent.
 
 """Sampler benchmark.
@@ -298,7 +297,7 @@ def write_jsonl(path: str, rows: list[dict]) -> None:
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Benchmark HPC-Ops Sampler for figure 11.")
+    p = argparse.ArgumentParser(description="Benchmark HPC-Ops Sampler")
     p.add_argument("--scenes", nargs="+", default=SCENES, choices=SCENES)
     p.add_argument("--batches", type=int, nargs="+", default=BATCHES)
     p.add_argument("--providers", nargs="+", default=PROVIDERS, choices=PROVIDERS)

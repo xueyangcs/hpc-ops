@@ -1,6 +1,6 @@
 # Sampler Benchmark
 
-This directory contains the benchmark entry used to reproduce the sampler latency results for the open-source figures.
+This directory contains the benchmark entry used to reproduce the sampler latency results.
 
 ## Figure Mapping
 - Operator: HPC-Ops Sampler
