@@ -95,14 +95,23 @@ def _load_module() -> int:
 __loaded_arch__ = _load_module()
 
 
+# Wrappers an architecture loads, when its module registers only some operators
+# (HPC_ARCH_OPERATORS_<arch> in CMakeLists.txt). The others would attach fakes to
+# schemas that module does not have. An architecture not listed loads every wrapper.
+_ARCH_WRAPPERS = {120: frozenset({"fuse_moe"})}
+
+
 def _discover_modules() -> Dict[str, ModuleType]:
     modules = {}
+    allowed = _ARCH_WRAPPERS.get(__loaded_arch__)
 
     for file in _pkg_dir.iterdir():
         if file.suffix != ".py" or file.name.startswith("_") or file.name == __file__:
             continue
 
         module_name = file.stem
+        if allowed is not None and module_name not in allowed:
+            continue
 
         try:
             module = importlib.import_module(f".{module_name}", package=__package__)

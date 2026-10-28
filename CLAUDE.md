@@ -189,6 +189,22 @@ being built:
    configured source fallback, see below);
 4. any other `sm<N>/` — another architecture's code, not compiled.
 
+An architecture that implements only some operators lists them in
+`HPC_ARCH_OPERATORS_<arch>` in `CMakeLists.txt`, and the wrappers it loads in
+`_ARCH_WRAPPERS` in `hpc/__init__.py`. Its module then compiles only those
+operators' sources, with `src/C/` and `src/utils/`, and registers nothing else.
+Porting another operator to it adds that operator to both lists.
+
+This differs from an operator that is registered but has no kernel for the
+current architecture. That operator exists in `torch.ops.hpc` and its Python
+wrapper is importable; calling it fails in `HPC_ARCH_DISPATCH`
+(`throw_arch_not_supported`). An operator left out of an
+`HPC_ARCH_OPERATORS_<arch>` list was never compiled into that module, so
+`torch.ops.hpc.<op>` has no such operator and the wrapper module is not
+imported, leaving `hpc.<wrapper>` undefined. The allowlist exists because the
+shared sources of some operators use SM90/SM100-only launch bounds or PTX and
+do not build for that architecture.
+
 Rule 4 is what makes the directory layout the visibility boundary: in an
 `sm<TARGET>` module, another architecture's `src/<op>/sm<N>/` is not merely
 unreachable, it was never compiled in.

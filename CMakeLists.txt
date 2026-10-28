@@ -18,10 +18,10 @@ find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
 # Architectures the build supports. The same list is in the Makefile and
 # setup.py; adding one also needs an HPC_ARCH_EVAL_<arch> block in
 # src/utils/utils.h.
-set(HPC_KNOWN_ARCHS 90 100 103)
+set(HPC_KNOWN_ARCHS 90 100 103 120)
 
 # Architectures whose gencode needs the "a" suffix for wgmma/TMA instructions.
-set(HPC_ARCH_SPECIFIC_ARCHS 90 100 103)
+set(HPC_ARCH_SPECIFIC_ARCHS 90 100 103 120)
 
 # Source fallback: an architecture with no sm<arch>/ of its own inherits the
 # listed one's sources, recompiled with its own gencode. Only sm103 -> sm100,
@@ -60,9 +60,24 @@ file(GLOB_RECURSE HPC_CANDIDATE_SOURCES RELATIVE "${CMAKE_SOURCE_DIR}"
      "${CMAKE_SOURCE_DIR}/src/*.cu" "${CMAKE_SOURCE_DIR}/src/*.cc")
 list(FILTER HPC_CANDIDATE_SOURCES EXCLUDE REGEX ".*test.*")
 
+# Operators an architecture implements, when it covers only part of src/. Only
+# their shared sources compile, with src/C/ and src/utils/; other operators stay
+# out of the module and are not registered. An architecture not listed compiles
+# every operator. Keep in step with _ARCH_WRAPPERS in hpc/__init__.py.
+set(HPC_ARCH_OPERATORS_120 fuse_moe)
+
+set(HPC_ARCH_OPERATORS "${HPC_ARCH_OPERATORS_${HPC_TARGET_ARCH}}")
+
 set(HPC_SOURCES "")
 foreach(rel IN LISTS HPC_CANDIDATE_SOURCES)
   get_filename_component(dir "${rel}" DIRECTORY)
+
+  if(HPC_ARCH_OPERATORS AND rel MATCHES "^src/([^/]+)/")
+    set(op "${CMAKE_MATCH_1}")
+    if(NOT op STREQUAL "C" AND NOT op STREQUAL "utils" AND NOT op IN_LIST HPC_ARCH_OPERATORS)
+      continue()
+    endif()
+  endif()
 
   if(NOT dir MATCHES "(^|/)sm([0-9]+)(/|$)")
     list(APPEND HPC_SOURCES "${CMAKE_SOURCE_DIR}/${rel}")  # rule 1
