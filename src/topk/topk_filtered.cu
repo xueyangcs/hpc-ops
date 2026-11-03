@@ -4,7 +4,7 @@
 #include "src/utils/utils.h"
 
 // The 1024-thread/two-CTA launch bounds exclude SM120.
-#if HPC_ARCH_IN(HPC_TOPK_ARCHS)
+#if HPC_ARCH_IN((90, 100, 103))
 
 #include <cooperative_groups.h>
 #include <cuda.h>
@@ -3020,4 +3020,4 @@ size_t topk_filtered_peak_workspace_bytes(int max_kv_len) {
 }  // namespace topk
 }  // namespace hpc
 
-#endif  // HPC_ARCH_IN(HPC_TOPK_ARCHS)
+#endif  // HPC_ARCH_IN((90, 100, 103))

@@ -194,10 +194,10 @@ add per-architecture operator or wrapper allowlists. Unsupported calls, includin
 architecture-dependent workspace queries, fail through dispatch. Keep `entry.cc`
 common.
 For a shared implementation supporting only some architectures, guard its body
-with `#if HPC_ARCH_IN(HPC_OP_ARCHS)` and dispatch with
-`HPC_ARCH_DISPATCH_ANY(op, HPC_OP_ARCHS, ...)`, using one list from the operator
-header. Use `sm<arch>/` for distinct implementations; dispatch alone does not
-prevent kernel compilation.
+with `#if HPC_ARCH_IN((90, 100, 103))` and dispatch with
+`HPC_ARCH_DISPATCH_ANY(op, (90, 100, 103), ...)`. Write architecture numbers
+directly at each site and keep the lists consistent. Use `sm<arch>/` for distinct
+implementations; dispatch alone does not prevent kernel compilation.
 
 Rule 4 is what makes the directory layout the visibility boundary: in an
 `sm<TARGET>` module, another architecture's `src/<op>/sm<N>/` is not merely
@@ -509,7 +509,7 @@ build may not compile all changed paths.
 For an operator already present:
 
 1. Determine whether the shared implementation at the operator root covers the
-   architecture. If it does, update its shared support list, if any.
+   architecture. If it does, update its source guard and dispatch lists, if any.
 2. If not, create `src/<op>/sm<arch>/` implementing the `*_async` declarations
    from the operator root.
 3. Preserve those signatures; they are the cross-architecture contract.
@@ -527,7 +527,7 @@ For an operator already present:
    `HPC_ARCH_SPECIFIC_ARCHS` in `CMakeLists.txt` for the `a` gencode suffix.
 4. Add a source fallback link only after running the inherited kernels on the new
    hardware. Compiling is not evidence; see "Source fallback".
-5. For each operator, extend a compatible shared implementation's support list
+5. For each operator, extend a compatible shared implementation's support lists
    or add an `sm<arch>/` implementation, keeping its dispatch consistent.
 6. Build it and a multi-architecture set, then check import, module selection,
    dispatch errors, and tests.

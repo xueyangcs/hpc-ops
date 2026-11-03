@@ -117,7 +117,7 @@ constexpr bool target_arch_in(std::initializer_list<int> archs) {
 
 #define HPC_ARCH_UNPAREN(...) __VA_ARGS__
 
-// Use the same support list for source guards and entry dispatch.
+// Architecture membership for preprocessor source guards.
 // Unlike target_arch_in, this predicate also works in a preprocessor #if.
 #define HPC_ARCH_IN(archs) HPC_ARCH_IN_(HPC_ARCH_UNPAREN archs)
 #define HPC_ARCH_IN_(...) HPC_ARCH_CAT(HPC_ARCH_IN_, HPC_ARCH_NARGS(__VA_ARGS__))(__VA_ARGS__)
