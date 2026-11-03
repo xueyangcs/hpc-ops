@@ -188,8 +188,10 @@ softmax statistics to reduce vocabulary reads and fixed launch overhead.
 ## Quick Start
 
 ### Requirements
-- NVIDIA SM90 architecture GPU. The SM120 (RTX PRO Blackwell) module builds
-  only the fused MoE operators (`HPC_ARCH_OPERATORS_120` in `CMakeLists.txt`)
+- NVIDIA GPU matching a built module (SM90, SM100, SM103 or SM120).
+  Operator availability depends on the architecture: wrappers remain importable,
+  and calls without a matching implementation report an unsupported-architecture
+  error. The SM120 (RTX PRO Blackwell) fused MoE paths are listed above.
 - Python 3.8 or higher
 - Compilers with C++17 support
 - CUDA Toolkit: CUDA 12.9 or higher (`make wheel` covers sm103, whose

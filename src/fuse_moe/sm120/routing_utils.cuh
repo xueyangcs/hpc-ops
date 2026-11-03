@@ -72,8 +72,9 @@ __device__ __forceinline__ void scan_expert_tiles(const int* counts, int num_exp
 
 // Maps every route with this block alone, run by all kRouteThreads threads:
 // counts the local routes per expert, scans them into cu_padded_tokens_per_group /
-// cu_m_tiles, and writes each local route's final row to topk_pos and row_to_route.
-// Other routes and unused padded rows get -1. Callers sync before reading the outputs.
+// cu_m_tiles, stores each local route's final row in topk_pos[route], and records
+// row_to_route[row] = route. Nonlocal routes get topk_pos[route] = -1; unused padded
+// rows get row_to_route[row] = -1. Callers sync before reading the outputs.
 // kOneRoutePerThread needs total_routes <= kRouteThreads; dropping the route
 // loop there keeps the single-token kernel about 0.15 us faster.
 template <bool kOneRoutePerThread = false>

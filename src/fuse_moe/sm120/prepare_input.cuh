@@ -12,8 +12,8 @@ namespace hpc::fuse_moe::sm120 {
 // token to MXFP8 E4M3 [num_tokens, K]; each token's UE8M0 scales are scattered to
 // its route rows in the packed SFA layout. The gate-up GEMM gathers A rows with
 // TMA gather4 (see gemm/gate_up/tma_gather4.cuh); this stage does not copy A per
-// route. Route placement (topk_pos, row_to_route) is route-major. The down GEMM
-// stays route-major.
+// route. Each local route maps to one GEMM row, grouped by expert and padded;
+// the down GEMM uses the same route rows.
 //
 // Host side (prepare_input.cu):
 //   quantize_tokens_and_scatter_scales_async quantizes BF16 [num_tokens, hidden]
@@ -22,14 +22,15 @@ namespace hpc::fuse_moe::sm120 {
 //   (packed_scale_row(row, cu_padded_tokens_per_group[expert], expert) + pack_col * scale_m_padded)
 //   * 4 + byte_in_pack is the scale of K block pack_col * 4 + byte_in_pack.
 //   row_to_route[padded_row] is the route, or -1 for padding.
-//   scatter_token_scales_async does the same for input that is already MXFP8:
-//   only the scales move.
+//   scatter_token_scales_async handles existing E4M3 input with uint8 UE8M0 or
+//   block128 float32 scales: the input stays in place; only the scales are prepared
+//   and scattered.
 //
-//   Without finalize_route_rows the routing has already written each local route's
-//   row to topk_pos and row_to_route. When finalize_route_rows is set, topk_pos
-//   holds each local route's position within its expert; the kernel adds the
-//   expert's cu_padded_tokens_per_group entry so topk_pos and row_to_route hold
-//   the final padded row.
+//   Without finalize_route_rows, routing has already stored each local route's final
+//   padded row in topk_pos[route] and set row_to_route[row] = route. When it is set,
+//   topk_pos[route] holds the route's position within its expert; the kernel adds
+//   cu_padded_tokens_per_group[expert], stores the final row in topk_pos[route], and
+//   records the inverse mapping as row_to_route[row] = route.
 
 void quantize_tokens_and_scatter_scales_async(const void *bf16_input, const int *topk_ids,
                                               const int *cu_padded_tokens_per_group, int *topk_pos,

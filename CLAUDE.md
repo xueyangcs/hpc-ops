@@ -189,21 +189,20 @@ being built:
    configured source fallback, see below);
 4. any other `sm<N>/` — another architecture's code, not compiled.
 
-An architecture that implements only some operators lists them in
-`HPC_ARCH_OPERATORS_<arch>` in `CMakeLists.txt`, and the wrappers it loads in
-`_ARCH_WRAPPERS` in `hpc/__init__.py`. Its module then compiles only those
-operators' sources, with `src/C/` and `src/utils/`, and registers nothing else.
-Porting another operator to it adds that operator to both lists.
+Operator registration and Python wrapper discovery are common to every module.
+Adding an architecture does not introduce an operator or wrapper allowlist.
+An operator without an implementation for the loaded architecture remains in
+`torch.ops.hpc`, and its Python wrapper remains importable; calls fail through
+`HPC_ARCH_DISPATCH` (`throw_arch_not_supported`). Architecture-dependent workspace
+and planning queries follow the same dispatch rule as kernel launches.
 
-This differs from an operator that is registered but has no kernel for the
-current architecture. That operator exists in `torch.ops.hpc` and its Python
-wrapper is importable; calling it fails in `HPC_ARCH_DISPATCH`
-(`throw_arch_not_supported`). An operator left out of an
-`HPC_ARCH_OPERATORS_<arch>` list was never compiled into that module, so
-`torch.ops.hpc.<op>` has no such operator and the wrapper module is not
-imported, leaving `hpc.<wrapper>` undefined. The allowlist exists because the
-shared sources of some operators use SM90/SM100-only launch bounds or PTX and
-do not build for that architecture.
+Dispatch and source selection have separate jobs. An unevaluated call in
+`HPC_ARCH_DISPATCH` does not stop another `.cu` file from compiling or instantiating
+its kernels. Keep unsupported kernel instantiations out of the module through
+architecture source directories, while retaining the common `entry.cc` and
+schema. Shared template headers may be reused by several architecture sources.
+Headers that instantiate architecture-constrained kernels must only be included
+by those architecture sources, never by unconditionally compiled shared sources.
 
 Rule 4 is what makes the directory layout the visibility boundary: in an
 `sm<TARGET>` module, another architecture's `src/<op>/sm<N>/` is not merely
@@ -239,8 +238,8 @@ possible evidence here, so a link belongs in the table only between architecture
 that share an instruction set, and only after the inherited kernels have run on
 the new hardware. Read `CMakeLists.txt` for the links that currently exist.
 
-An implementation that is not portable to every known architecture lives in
-`sm<arch>/` for each architecture it supports; an architecture no operator
+Kernel instantiations that are not portable to every known architecture live in
+`sm<arch>/` for each architecture they support; an architecture no operator
 directory covers raises "not implemented" when that operator is called. Where a
 fallback link applies, an operator with the source architecture's directory but
 not the target's is compiled into the target module with the target's own

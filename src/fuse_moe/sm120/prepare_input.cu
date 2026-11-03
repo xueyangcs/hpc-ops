@@ -60,9 +60,9 @@ __device__ __forceinline__ void scatter_packed_scale_token_routes(
 }
 
 // Returns the padded GEMM row of a local route. With kFinalizeRouteRows, topk_pos holds the
-// route's position within its expert on entry; this adds cu_padded_tokens_per_group[expert]
-// and writes the final padded row to topk_pos and row_to_route. Without it, the routing has
-// already written the final row, which is only read here.
+// route's position within its expert on entry; this adds cu_padded_tokens_per_group[expert],
+// stores the final padded row in topk_pos[route], and records row_to_route[row] = route.
+// Without it, routing has already stored both mappings; only topk_pos[route] is read here.
 template <bool kFinalizeRouteRows>
 __device__ __forceinline__ int resolve_route_row(int route, int expert,
                                                  const int *cu_padded_tokens_per_group,

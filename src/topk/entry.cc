@@ -10,9 +10,79 @@
 #include <tuple>
 
 #include "src/topk/topk.h"
+#include "src/utils/utils.h"
 
 namespace hpc {
 namespace topk {
+
+namespace {
+
+std::tuple<int64_t, int64_t> workspace_sizes(const char *op, int64_t num_rows, int64_t max_kv_len) {
+  TORCH_CHECK(num_rows >= 0, "num_rows must be non-negative");
+  TORCH_CHECK(max_kv_len >= 0, "max_kv_len must be non-negative");
+  TORCH_CHECK(num_rows <= std::numeric_limits<int>::max(), "num_rows exceeds the supported range");
+  TORCH_CHECK(max_kv_len <= std::numeric_limits<int>::max(),
+              "max_kv_len exceeds the supported range");
+  std::tuple<int64_t, int64_t> sizes;
+  HPC_ARCH_DISPATCH(
+      op, 90,
+      sizes = std::make_tuple(
+          static_cast<int64_t>(topk_filtered_counters_bytes(static_cast<int>(num_rows))),
+          static_cast<int64_t>(topk_filtered_workspace_bytes(static_cast<int>(num_rows),
+                                                             static_cast<int>(max_kv_len)))),
+      100,
+      sizes = std::make_tuple(
+          static_cast<int64_t>(topk_filtered_counters_bytes(static_cast<int>(num_rows))),
+          static_cast<int64_t>(topk_filtered_workspace_bytes(static_cast<int>(num_rows),
+                                                             static_cast<int>(max_kv_len)))),
+      103,
+      sizes = std::make_tuple(
+          static_cast<int64_t>(topk_filtered_counters_bytes(static_cast<int>(num_rows))),
+          static_cast<int64_t>(topk_filtered_workspace_bytes(static_cast<int>(num_rows),
+                                                             static_cast<int>(max_kv_len)))));
+  return sizes;
+}
+
+}  // namespace
+
+std::tuple<int64_t, int64_t> topk_filtered_workspace_size_entry(int64_t num_rows,
+                                                                int64_t max_kv_len) {
+  return workspace_sizes("topk_filtered_workspace_size", num_rows, max_kv_len);
+}
+
+int64_t topk_filtered_min_workspace_size_entry(int64_t max_kv_len) {
+  TORCH_CHECK(max_kv_len >= 0, "max_kv_len must be non-negative");
+  TORCH_CHECK(max_kv_len <= std::numeric_limits<int>::max(),
+              "max_kv_len exceeds the supported range");
+  int64_t bytes = 0;
+  HPC_ARCH_DISPATCH(
+      "topk_filtered_min_workspace_size", 90,
+      bytes = static_cast<int64_t>(topk_filtered_min_workspace_bytes(static_cast<int>(max_kv_len))),
+      100,
+      bytes = static_cast<int64_t>(topk_filtered_min_workspace_bytes(static_cast<int>(max_kv_len))),
+      103,
+      bytes =
+          static_cast<int64_t>(topk_filtered_min_workspace_bytes(static_cast<int>(max_kv_len))));
+  return bytes;
+}
+
+int64_t topk_filtered_peak_workspace_size_entry(int64_t max_kv_len) {
+  TORCH_CHECK(max_kv_len >= 0, "max_kv_len must be non-negative");
+  TORCH_CHECK(max_kv_len <= std::numeric_limits<int>::max(),
+              "max_kv_len exceeds the supported range");
+  int64_t bytes = 0;
+  HPC_ARCH_DISPATCH(
+      "topk_filtered_peak_workspace_size", 90,
+      bytes =
+          static_cast<int64_t>(topk_filtered_peak_workspace_bytes(static_cast<int>(max_kv_len))),
+      100,
+      bytes =
+          static_cast<int64_t>(topk_filtered_peak_workspace_bytes(static_cast<int>(max_kv_len))),
+      103,
+      bytes =
+          static_cast<int64_t>(topk_filtered_peak_workspace_bytes(static_cast<int>(max_kv_len))));
+  return bytes;
+}
 
 torch::Tensor topk_filtered_entry(const torch::Tensor &logits, const torch::Tensor &ke,
                                   torch::Tensor &output, int64_t topk,
@@ -59,6 +129,9 @@ torch::Tensor topk_filtered_entry(const torch::Tensor &logits, const torch::Tens
   TORCH_CHECK(static_cast<int64_t>(output.size(1)) >= topk, "output cols < topk");
   TORCH_CHECK(output.stride(0) >= topk, "output rows must not overlap");
 
+  const auto [required_counters_bytes, required_workspace_bytes] =
+      workspace_sizes("topk_filtered", row_capacity, n);
+
   torch::Tensor cnt;
   if (counters.has_value()) {
     cnt = counters.value();
@@ -68,10 +141,9 @@ torch::Tensor topk_filtered_entry(const torch::Tensor &logits, const torch::Tens
     TORCH_CHECK(cnt.device() == logits.device(), "counters must be on the same device as logits");
     TORCH_CHECK(reinterpret_cast<uintptr_t>(cnt.mutable_data_ptr()) % alignof(int32_t) == 0,
                 "counters must be int32-aligned");
-    TORCH_CHECK(static_cast<size_t>(cnt.numel()) >= topk_filtered_counters_bytes(row_capacity),
-                "counters is too small for topk_filtered");
+    TORCH_CHECK(cnt.numel() >= required_counters_bytes, "counters is too small for topk_filtered");
   } else {
-    cnt = torch::zeros({static_cast<int64_t>(topk_filtered_counters_bytes(row_capacity))},
+    cnt = torch::zeros({required_counters_bytes},
                        torch::dtype(torch::kUInt8).device(logits.device()));
   }
 
@@ -84,48 +156,34 @@ torch::Tensor topk_filtered_entry(const torch::Tensor &logits, const torch::Tens
     TORCH_CHECK(ws.device() == logits.device(), "workspace must be on the same device as logits");
     TORCH_CHECK(reinterpret_cast<uintptr_t>(ws.mutable_data_ptr()) % alignof(int32_t) == 0,
                 "workspace must be int32-aligned");
-    TORCH_CHECK(static_cast<size_t>(ws.numel()) >= topk_filtered_min_workspace_bytes(n),
+    TORCH_CHECK(ws.numel() >= topk_filtered_min_workspace_size_entry(n),
                 "workspace is too small for topk_filtered");
   } else {
-    ws = torch::empty({static_cast<int64_t>(topk_filtered_workspace_bytes(row_capacity, n))},
+    ws = torch::empty({required_workspace_bytes},
                       torch::dtype(torch::kUInt8).device(logits.device()));
   }
 
   auto stream = at::cuda::getCurrentCUDAStream(logits.get_device());
-  bool ok = topk_filtered_async(
-      output.mutable_data_ptr<int>(), logits.const_data_ptr<float>(), ke.const_data_ptr<int>(),
-      topk, num_valid_rows.const_data_ptr<int>(), row_capacity, n, row_stride, out_stride,
-      cnt.mutable_data_ptr(), cnt.numel(), ws.mutable_data_ptr(), ws.numel(), stream);
+  bool ok = false;
+  HPC_ARCH_DISPATCH(
+      "topk_filtered", 90,
+      ok = topk_filtered_async(output.mutable_data_ptr<int>(), logits.const_data_ptr<float>(),
+                               ke.const_data_ptr<int>(), topk, num_valid_rows.const_data_ptr<int>(),
+                               row_capacity, n, row_stride, out_stride, cnt.mutable_data_ptr(),
+                               cnt.numel(), ws.mutable_data_ptr(), ws.numel(), stream),
+      100,
+      ok = topk_filtered_async(output.mutable_data_ptr<int>(), logits.const_data_ptr<float>(),
+                               ke.const_data_ptr<int>(), topk, num_valid_rows.const_data_ptr<int>(),
+                               row_capacity, n, row_stride, out_stride, cnt.mutable_data_ptr(),
+                               cnt.numel(), ws.mutable_data_ptr(), ws.numel(), stream),
+      103,
+      ok = topk_filtered_async(output.mutable_data_ptr<int>(), logits.const_data_ptr<float>(),
+                               ke.const_data_ptr<int>(), topk, num_valid_rows.const_data_ptr<int>(),
+                               row_capacity, n, row_stride, out_stride, cnt.mutable_data_ptr(),
+                               cnt.numel(), ws.mutable_data_ptr(), ws.numel(), stream));
   TORCH_CHECK(ok, "launch topk_filtered kernel failed!");
 
   return output;
-}
-
-std::tuple<int64_t, int64_t> topk_filtered_workspace_size_entry(int64_t num_rows,
-                                                                int64_t max_kv_len) {
-  TORCH_CHECK(num_rows >= 0, "num_rows must be non-negative");
-  TORCH_CHECK(max_kv_len >= 0, "max_kv_len must be non-negative");
-  TORCH_CHECK(num_rows <= std::numeric_limits<int>::max(), "num_rows exceeds the supported range");
-  TORCH_CHECK(max_kv_len <= std::numeric_limits<int>::max(),
-              "max_kv_len exceeds the supported range");
-  return std::make_tuple(
-      static_cast<int64_t>(topk_filtered_counters_bytes(static_cast<int>(num_rows))),
-      static_cast<int64_t>(
-          topk_filtered_workspace_bytes(static_cast<int>(num_rows), static_cast<int>(max_kv_len))));
-}
-
-int64_t topk_filtered_min_workspace_size_entry(int64_t max_kv_len) {
-  TORCH_CHECK(max_kv_len >= 0, "max_kv_len must be non-negative");
-  TORCH_CHECK(max_kv_len <= std::numeric_limits<int>::max(),
-              "max_kv_len exceeds the supported range");
-  return static_cast<int64_t>(topk_filtered_min_workspace_bytes(static_cast<int>(max_kv_len)));
-}
-
-int64_t topk_filtered_peak_workspace_size_entry(int64_t max_kv_len) {
-  TORCH_CHECK(max_kv_len >= 0, "max_kv_len must be non-negative");
-  TORCH_CHECK(max_kv_len <= std::numeric_limits<int>::max(),
-              "max_kv_len exceeds the supported range");
-  return static_cast<int64_t>(topk_filtered_peak_workspace_bytes(static_cast<int>(max_kv_len)));
 }
 
 }  // namespace topk
