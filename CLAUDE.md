@@ -189,20 +189,11 @@ being built:
    configured source fallback, see below);
 4. any other `sm<N>/` — another architecture's code, not compiled.
 
-Operator registration and Python wrapper discovery are common to every module.
-Adding an architecture does not introduce an operator or wrapper allowlist.
-An operator without an implementation for the loaded architecture remains in
-`torch.ops.hpc`, and its Python wrapper remains importable; calls fail through
-`HPC_ARCH_DISPATCH` (`throw_arch_not_supported`). Architecture-dependent workspace
-and planning queries follow the same dispatch rule as kernel launches.
-
-Dispatch and source selection have separate jobs. An unevaluated call in
-`HPC_ARCH_DISPATCH` does not stop another `.cu` file from compiling or instantiating
-its kernels. Keep unsupported kernel instantiations out of the module through
-architecture source directories, while retaining the common `entry.cc` and
-schema. Shared template headers may be reused by several architecture sources.
-Headers that instantiate architecture-constrained kernels must only be included
-by those architecture sources, never by unconditionally compiled shared sources.
+Register all operators and import all Python wrappers in every module; do not
+add architecture allowlists. Unsupported calls, including architecture-dependent
+workspace queries, fail through `HPC_ARCH_DISPATCH`. Dispatch does not control
+compilation: instantiate architecture-constrained kernels only from `sm<arch>/`
+sources, reusing shared headers as needed, and keep `entry.cc` common.
 
 Rule 4 is what makes the directory layout the visibility boundary: in an
 `sm<TARGET>` module, another architecture's `src/<op>/sm<N>/` is not merely
