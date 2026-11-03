@@ -9,8 +9,6 @@
 #ifndef SRC_UTILS_UTILS_H_
 #define SRC_UTILS_UTILS_H_
 
-#include <initializer_list>
-
 #ifndef HPC_TARGET_ARCH
 #error "HPC_TARGET_ARCH is not defined; this file must be compiled by the project's CMake."
 #endif
@@ -23,17 +21,6 @@ int get_sm_major_version();
 
 // Device SM architecture, major * 10 + minor. Cached; assumed same as device 0.
 int get_sm_arch();
-
-inline constexpr int kTargetArch = HPC_TARGET_ARCH;
-
-constexpr bool target_arch_in(std::initializer_list<int> archs) {
-  for (int arch : archs) {
-    if (arch == kTargetArch) {
-      return true;
-    }
-  }
-  return false;
-}
 
 // Unreached dispatch: not implemented, or the loaded module does not match.
 [[noreturn]] void throw_arch_not_supported(const char *op, const char *impl_archs);
@@ -117,8 +104,7 @@ constexpr bool target_arch_in(std::initializer_list<int> archs) {
 
 #define HPC_ARCH_UNPAREN(...) __VA_ARGS__
 
-// Architecture membership for preprocessor source guards.
-// Unlike target_arch_in, this predicate also works in a preprocessor #if.
+// Architecture membership for both #if source guards and if constexpr dispatch.
 #define HPC_ARCH_IN(archs) HPC_ARCH_IN_(HPC_ARCH_UNPAREN archs)
 #define HPC_ARCH_IN_(...) HPC_ARCH_CAT(HPC_ARCH_IN_, HPC_ARCH_NARGS(__VA_ARGS__))(__VA_ARGS__)
 #define HPC_ARCH_IN_1(a) (HPC_TARGET_ARCH == (a))
@@ -127,20 +113,20 @@ constexpr bool target_arch_in(std::initializer_list<int> archs) {
 #define HPC_ARCH_IN_4(a, ...) (HPC_ARCH_IN_1(a) || HPC_ARCH_IN_3(__VA_ARGS__))
 #define HPC_ARCH_IN_5(a, ...) (HPC_ARCH_IN_1(a) || HPC_ARCH_IN_4(__VA_ARGS__))
 
-#define HPC_ARCH_STRINGIFY(archs) HPC_ARCH_STRINGIFY_(archs)
-#define HPC_ARCH_STRINGIFY_(archs) #archs
+#define HPC_ARCH_STRINGIFY(...) HPC_ARCH_STRINGIFY_(__VA_ARGS__)
+#define HPC_ARCH_STRINGIFY_(...) #__VA_ARGS__
 
 // One expression for a parenthesized architecture list; top-level commas are allowed.
-#define HPC_ARCH_DISPATCH_ANY(op, archs, ...)                           \
-  do {                                                                  \
-    if constexpr (::hpc::target_arch_in({HPC_ARCH_UNPAREN archs})) {    \
-      if (::hpc::get_sm_arch() != ::hpc::kTargetArch) {                 \
-        ::hpc::throw_arch_not_supported(op, HPC_ARCH_STRINGIFY(archs)); \
-      }                                                                 \
-      __VA_ARGS__;                                                      \
-    } else {                                                            \
-      ::hpc::throw_arch_not_supported(op, HPC_ARCH_STRINGIFY(archs));   \
-    }                                                                   \
+#define HPC_ARCH_DISPATCH_ANY(op, archs, ...)                                            \
+  do {                                                                                   \
+    if constexpr (HPC_ARCH_IN(archs)) {                                                  \
+      if (::hpc::get_sm_arch() != HPC_TARGET_ARCH) {                                     \
+        ::hpc::throw_arch_not_supported(op, HPC_ARCH_STRINGIFY(HPC_ARCH_UNPAREN archs)); \
+      }                                                                                  \
+      __VA_ARGS__;                                                                       \
+    } else {                                                                             \
+      ::hpc::throw_arch_not_supported(op, HPC_ARCH_STRINGIFY(HPC_ARCH_UNPAREN archs));   \
+    }                                                                                    \
   } while (0)
 
 #endif  // SRC_UTILS_UTILS_H_

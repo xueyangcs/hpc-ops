@@ -59,16 +59,11 @@ int get_sm_arch() {
 }
 
 void throw_arch_not_supported(const char *op, const char *impl_archs) {
-  // The list form passes the stringized "(90, 100)"; drop the parentheses.
-  std::string archs(impl_archs);
-  if (archs.size() >= 2 && archs.front() == '(' && archs.back() == ')') {
-    archs = archs.substr(1, archs.size() - 2);
-  }
   // This module only launches on the architecture it was compiled for, so either
   // the operator has no kernel for this device, or HPC_SM_ARCH loaded a module
   // the device does not match.
-  TORCH_CHECK(false, "hpc::", op, " does not run on sm", get_sm_arch(), ": implemented for ", archs,
-              ", loaded module built for sm", HPC_TARGET_ARCH, ".");
+  TORCH_CHECK(false, "hpc::", op, " does not run on sm", get_sm_arch(), ": implemented for ",
+              impl_archs, ", loaded module built for sm", HPC_TARGET_ARCH, ".");
 }
 
 }  // namespace hpc

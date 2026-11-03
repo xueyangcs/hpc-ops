@@ -189,15 +189,12 @@ being built:
    configured source fallback, see below);
 4. any other `sm<N>/` — another architecture's code, not compiled.
 
-Register all operators and import all Python wrappers in every module; do not
-add per-architecture operator or wrapper allowlists. Unsupported calls, including
-architecture-dependent workspace queries, fail through dispatch. Keep `entry.cc`
-common.
-For a shared implementation supporting only some architectures, guard its body
-with `#if HPC_ARCH_IN((90, 100, 103))` and dispatch with
-`HPC_ARCH_DISPATCH_ANY(op, (90, 100, 103), ...)`. Write architecture numbers
-directly at each site and keep the lists consistent. Use `sm<arch>/` for distinct
-implementations; dispatch alone does not prevent kernel compilation.
+Register all operators and import all wrappers on every architecture; do not add
+operator or wrapper allowlists. Keep `entry.cc` common and reject unsupported
+calls, including workspace queries, through dispatch. Guard shared kernels with
+`#if HPC_ARCH_IN((90, 100, 103))` when needed; use `sm<arch>/` for distinct
+implementations. Write matching architecture numbers directly in source guards
+and dispatch calls: dispatch alone does not prevent kernel compilation.
 
 Rule 4 is what makes the directory layout the visibility boundary: in an
 `sm<TARGET>` module, another architecture's `src/<op>/sm<N>/` is not merely
