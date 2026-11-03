@@ -24,18 +24,8 @@ std::tuple<int64_t, int64_t> workspace_sizes(const char *op, int64_t num_rows, i
   TORCH_CHECK(max_kv_len <= std::numeric_limits<int>::max(),
               "max_kv_len exceeds the supported range");
   std::tuple<int64_t, int64_t> sizes;
-  HPC_ARCH_DISPATCH(
-      op, 90,
-      sizes = std::make_tuple(
-          static_cast<int64_t>(topk_filtered_counters_bytes(static_cast<int>(num_rows))),
-          static_cast<int64_t>(topk_filtered_workspace_bytes(static_cast<int>(num_rows),
-                                                             static_cast<int>(max_kv_len)))),
-      100,
-      sizes = std::make_tuple(
-          static_cast<int64_t>(topk_filtered_counters_bytes(static_cast<int>(num_rows))),
-          static_cast<int64_t>(topk_filtered_workspace_bytes(static_cast<int>(num_rows),
-                                                             static_cast<int>(max_kv_len)))),
-      103,
+  HPC_ARCH_DISPATCH_ANY(
+      op, (90, 100, 103),
       sizes = std::make_tuple(
           static_cast<int64_t>(topk_filtered_counters_bytes(static_cast<int>(num_rows))),
           static_cast<int64_t>(topk_filtered_workspace_bytes(static_cast<int>(num_rows),
@@ -55,14 +45,9 @@ int64_t topk_filtered_min_workspace_size_entry(int64_t max_kv_len) {
   TORCH_CHECK(max_kv_len <= std::numeric_limits<int>::max(),
               "max_kv_len exceeds the supported range");
   int64_t bytes = 0;
-  HPC_ARCH_DISPATCH(
-      "topk_filtered_min_workspace_size", 90,
-      bytes = static_cast<int64_t>(topk_filtered_min_workspace_bytes(static_cast<int>(max_kv_len))),
-      100,
-      bytes = static_cast<int64_t>(topk_filtered_min_workspace_bytes(static_cast<int>(max_kv_len))),
-      103,
-      bytes =
-          static_cast<int64_t>(topk_filtered_min_workspace_bytes(static_cast<int>(max_kv_len))));
+  HPC_ARCH_DISPATCH_ANY("topk_filtered_min_workspace_size", (90, 100, 103),
+                        bytes = static_cast<int64_t>(
+                            topk_filtered_min_workspace_bytes(static_cast<int>(max_kv_len))));
   return bytes;
 }
 
@@ -71,16 +56,9 @@ int64_t topk_filtered_peak_workspace_size_entry(int64_t max_kv_len) {
   TORCH_CHECK(max_kv_len <= std::numeric_limits<int>::max(),
               "max_kv_len exceeds the supported range");
   int64_t bytes = 0;
-  HPC_ARCH_DISPATCH(
-      "topk_filtered_peak_workspace_size", 90,
-      bytes =
-          static_cast<int64_t>(topk_filtered_peak_workspace_bytes(static_cast<int>(max_kv_len))),
-      100,
-      bytes =
-          static_cast<int64_t>(topk_filtered_peak_workspace_bytes(static_cast<int>(max_kv_len))),
-      103,
-      bytes =
-          static_cast<int64_t>(topk_filtered_peak_workspace_bytes(static_cast<int>(max_kv_len))));
+  HPC_ARCH_DISPATCH_ANY("topk_filtered_peak_workspace_size", (90, 100, 103),
+                        bytes = static_cast<int64_t>(
+                            topk_filtered_peak_workspace_bytes(static_cast<int>(max_kv_len))));
   return bytes;
 }
 
@@ -165,18 +143,8 @@ torch::Tensor topk_filtered_entry(const torch::Tensor &logits, const torch::Tens
 
   auto stream = at::cuda::getCurrentCUDAStream(logits.get_device());
   bool ok = false;
-  HPC_ARCH_DISPATCH(
-      "topk_filtered", 90,
-      ok = topk_filtered_async(output.mutable_data_ptr<int>(), logits.const_data_ptr<float>(),
-                               ke.const_data_ptr<int>(), topk, num_valid_rows.const_data_ptr<int>(),
-                               row_capacity, n, row_stride, out_stride, cnt.mutable_data_ptr(),
-                               cnt.numel(), ws.mutable_data_ptr(), ws.numel(), stream),
-      100,
-      ok = topk_filtered_async(output.mutable_data_ptr<int>(), logits.const_data_ptr<float>(),
-                               ke.const_data_ptr<int>(), topk, num_valid_rows.const_data_ptr<int>(),
-                               row_capacity, n, row_stride, out_stride, cnt.mutable_data_ptr(),
-                               cnt.numel(), ws.mutable_data_ptr(), ws.numel(), stream),
-      103,
+  HPC_ARCH_DISPATCH_ANY(
+      "topk_filtered", (90, 100, 103),
       ok = topk_filtered_async(output.mutable_data_ptr<int>(), logits.const_data_ptr<float>(),
                                ke.const_data_ptr<int>(), topk, num_valid_rows.const_data_ptr<int>(),
                                row_capacity, n, row_stride, out_stride, cnt.mutable_data_ptr(),

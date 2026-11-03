@@ -324,6 +324,13 @@ Each architecture repeats the call expression rather than sharing one, because
 the architectures may not call the same `*_async` — the pair is `<arch>, <expr>`,
 and the expr is free to differ.
 
+When the expression is identical, use the list form; unsupported builds discard
+the call with `if constexpr`:
+
+```cpp
+HPC_ARCH_DISPATCH_ANY("widget", (90, 100), launched = widget_async(...));
+```
+
 `HPC_ARCH_DISPATCH` is one chain: if nothing launched, it raises before any host
 code after it runs. A function with launches in separate branches gets one
 `HPC_ARCH_DISPATCH` per branch — each is a complete decision on its own.
