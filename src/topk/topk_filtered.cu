@@ -1,11 +1,10 @@
 // Copyright (C) 2026 Tencent.
 
-#ifndef SRC_TOPK_TOPK_FILTERED_CUH_
-#define SRC_TOPK_TOPK_FILTERED_CUH_
+#include "src/topk/topk.h"
+#include "src/utils/utils.h"
 
-// Shared implementation for architecture launchers. Only sm<arch>/ sources
-// include this header: its 1024-thread/two-CTA launch bounds and cluster kernels
-// are instantiated only for the architectures providing those launchers.
+// The 1024-thread/two-CTA launch bounds exclude SM120.
+#if HPC_ARCH_IN(HPC_TOPK_ARCHS)
 
 #include <cooperative_groups.h>
 #include <cuda.h>
@@ -13,9 +12,7 @@
 
 #include <algorithm>
 
-#include "src/topk/topk.h"
 #include "src/topk/topk_filtered_boundary.cuh"
-#include "src/utils/utils.h"
 
 namespace hpc {
 namespace topk {
@@ -2900,10 +2897,12 @@ inline DispatchPlan choose_topk2048_plan(int m, int n) {
   return {DispatchKind::kPersistentSampledExact};
 }
 
-inline bool launch_filtered(int* topk_indices, const float* logits, const int* ke, int topk,
-                            const int* num_valid_rows, int m, int n, int row_stride, int out_stride,
-                            void* counters, size_t counters_bytes, void* workspace,
-                            size_t workspace_bytes, cudaStream_t stream) {
+}  // namespace filtered
+
+bool topk_filtered_async(int* topk_indices, const float* logits, const int* ke, int topk,
+                         const int* num_valid_rows, int m, int n, int row_stride, int out_stride,
+                         void* counters, size_t counters_bytes, void* workspace,
+                         size_t workspace_bytes, cudaStream_t stream) {
   // Path selection reads only the static shape (topk, m, n) and never
   // num_valid_rows, so a captured CUDA graph always replays the kernel it
   // captured. `m` is the static row capacity, not the number of valid rows.
@@ -2991,7 +2990,9 @@ inline bool launch_filtered(int* topk_indices, const float* logits, const int* k
       counters_bytes, workspace, workspace_bytes, stream);
 }
 
-inline size_t workspace_bytes(int num_rows, int max_kv_len) {
+size_t topk_filtered_counters_bytes(int num_rows) { return filtered::counters_bytes_for(num_rows); }
+
+size_t topk_filtered_workspace_bytes(int num_rows, int max_kv_len) {
   const filtered::DispatchPlan plan = filtered::choose_topk2048_plan(num_rows, max_kv_len);
   if (plan.kind == filtered::DispatchKind::kKvSplitSampledExact) {
     return filtered::split_workspace_bytes(num_rows, plan.splits, max_kv_len);
@@ -2999,7 +3000,11 @@ inline size_t workspace_bytes(int num_rows, int max_kv_len) {
   return filtered::one_cta_workspace_bytes(max_kv_len);
 }
 
-inline size_t peak_workspace_bytes(int max_kv_len) {
+size_t topk_filtered_min_workspace_bytes(int max_kv_len) {
+  return filtered::one_cta_workspace_bytes(max_kv_len);
+}
+
+size_t topk_filtered_peak_workspace_bytes(int max_kv_len) {
   // Cooperative plans occur only through one row past half the grid. Their
   // buffers are not monotonic in that interval -- a larger row count can cross
   // into a smaller split count or the row-local envelope -- so take the max
@@ -3007,13 +3012,12 @@ inline size_t peak_workspace_bytes(int max_kv_len) {
   size_t peak = filtered::one_cta_workspace_bytes(max_kv_len);
   const int max_split_rows = filtered::SPLIT_MAX_ROWS;
   for (int num_rows = 1; num_rows <= max_split_rows; ++num_rows) {
-    peak = std::max(peak, workspace_bytes(num_rows, max_kv_len));
+    peak = std::max(peak, topk_filtered_workspace_bytes(num_rows, max_kv_len));
   }
   return peak;
 }
 
-}  // namespace filtered
 }  // namespace topk
 }  // namespace hpc
 
-#endif  // SRC_TOPK_TOPK_FILTERED_CUH_
+#endif  // HPC_ARCH_IN(HPC_TOPK_ARCHS)

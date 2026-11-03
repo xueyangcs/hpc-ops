@@ -116,6 +116,17 @@ constexpr bool target_arch_in(std::initializer_list<int> archs) {
   } while (0)
 
 #define HPC_ARCH_UNPAREN(...) __VA_ARGS__
+
+// Use the same support list for source guards and entry dispatch.
+// Unlike target_arch_in, this predicate also works in a preprocessor #if.
+#define HPC_ARCH_IN(archs) HPC_ARCH_IN_(HPC_ARCH_UNPAREN archs)
+#define HPC_ARCH_IN_(...) HPC_ARCH_CAT(HPC_ARCH_IN_, HPC_ARCH_NARGS(__VA_ARGS__))(__VA_ARGS__)
+#define HPC_ARCH_IN_1(a) (HPC_TARGET_ARCH == (a))
+#define HPC_ARCH_IN_2(a, ...) (HPC_ARCH_IN_1(a) || HPC_ARCH_IN_1(__VA_ARGS__))
+#define HPC_ARCH_IN_3(a, ...) (HPC_ARCH_IN_1(a) || HPC_ARCH_IN_2(__VA_ARGS__))
+#define HPC_ARCH_IN_4(a, ...) (HPC_ARCH_IN_1(a) || HPC_ARCH_IN_3(__VA_ARGS__))
+#define HPC_ARCH_IN_5(a, ...) (HPC_ARCH_IN_1(a) || HPC_ARCH_IN_4(__VA_ARGS__))
+
 #define HPC_ARCH_STRINGIFY(archs) HPC_ARCH_STRINGIFY_(archs)
 #define HPC_ARCH_STRINGIFY_(archs) #archs
 

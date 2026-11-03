@@ -6,6 +6,8 @@
 #include <cuda_runtime_api.h>
 #include <stdint.h>
 
+#define HPC_TOPK_ARCHS (90, 100, 103)
+
 namespace hpc {
 namespace topk {
 
